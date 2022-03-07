@@ -1,0 +1,82 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name:  wireguard
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wireguard-configmap
+  namespace: wireguard
+data:
+  ALLOWEDIPS: 0.0.0.0/0
+  PEERDNS: auto
+  PEERS: "5" # Number of peers configurations to generate
+  PGID: "1000"
+  PUID: "1000"
+  SERVERPORT: "31820" # Server public port
+  SERVERURL: <server_public_address> # Server public IP address or domain name
+  TZ: Europe/Amsterdam
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: wireguard
+  namespace: wireguard
+  labels:
+    name: wireguard
+spec:
+  containers:
+    - name: wireguard
+      envFrom:
+      - configMapRef:
+          name: wireguard-configmap 
+      image: ghcr.io/linuxserver/wireguard
+      ports:
+        - containerPort: 51820
+          protocol: UDP
+      resources:
+        requests:
+          memory: "64Mi"
+          cpu: "100m"
+        limits:
+          memory: "128Mi"
+          cpu: "200m"
+      securityContext:
+        capabilities:
+          add:
+            - NET_ADMIN
+            - SYS_MODULE
+      volumeMounts:
+        - name: wg-config
+          mountPath: /config
+        - name: host-volumes
+          mountPath: /lib/modules
+  volumes:
+  - name: wg-config
+    hostPath:
+      path: /wg-config
+      type: DirectoryOrCreate
+  - name: host-volumes
+    hostPath:
+      path: /lib/modules
+      type: Directory
+  restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: wireguard
+  labels:
+    name: wireguard
+  name: wireguard
+spec:
+  type: NodePort
+  ports:
+    - name: "wireguard-service-port"
+      port: 51820
+      nodePort: 31820 # Server public port
+      protocol: UDP
+      targetPort: 51820
+  selector:
+    name: wireguard
